@@ -3,11 +3,12 @@
 . /etc/rc.conf
 . /etc/rc.d/functions
 
-PID=$(pidof -o %PPID /usr/sbin/i8kmonitor)
+PID=$(pidof -o %PPID python /usr/sbin/i8kmonitor)
 case "$1" in
   start)
     stat_busy "Starting i8kmonitor"
     [ -z "$PID" ] && /usr/sbin/i8kmonitor >/dev/null 2>&1 &
+    PID=$(pidof -o %PPID python /usr/sbin/i8kmonitor)
     if [ -z "$PID" -o $? -gt 0 ]; then
       stat_fail
     else
@@ -17,7 +18,7 @@ case "$1" in
     ;;
   stop)
     stat_busy "Stopping i8kmonitor"
-    [ ! -z "$PID" ]  && kill $PID &> /dev/null
+    [ ! -z "$PID" ]  && kill -USR1 $PID &> /dev/null
     if [ $? -gt 0 ]; then
       stat_fail
     else
