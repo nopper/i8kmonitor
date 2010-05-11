@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 
 __author__ = 'Francesco Piccinno <stack.box@gmail.com>'
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __copyright__ = 'Copyright (C) 2009 Francesco Piccinno'
 __license__ = 'BSD'
 __license_long__ = """
@@ -37,6 +37,7 @@ __license_long__ = """
 
 import os
 import sys
+import atexit
 
 from time import sleep
 from fcntl import ioctl
@@ -115,13 +116,23 @@ class Monitor(object):
         except:
             raise Exception('Could not load configuration from %s' % conf_file)
 
-        self.i8k = os.open(self.i8kfile, os.O_RDONLY)
+        if self.checkmeth.lower() == 'thm':
+            self.checkmeth = 1
+            self.thm = open(self.thmfile, 'r')
+            self.aca = open(self.acafile, 'r')
+        else:
+            self.checkmeth = 0
+            self.i8k = os.open(self.i8kfile, os.O_RDONLY)
 
     def signal(self, signum, frame):
         print "Shutting down"
 
         try:
-            os.close(self.i8k)
+            if self.checkmeth == 0:
+                os.close(self.i8k)
+            else:
+                self.thm.close()
+                self.aca.close()
         except:
             pass
 
@@ -146,21 +157,52 @@ class Monitor(object):
 
         self.fancmd = conf.get('general', 'fancmd')
         self.i8kfile = conf.get('general', 'i8kfile')
+        self.thmfile = conf.get('general', 'thmfile')
+        self.acafile = conf.get('general', 'ac_adapter')
+        self.pidfile = conf.get('general', 'pidfile')
+        self.checkmeth = conf.get('general', 'method')
         self.interval = conf.getint('general', 'interval')
 
+    def delpid(self):
+        os.remove(self.pidfile)
+
     def start_monitor(self):
-        print "Monitoring i8k at interval of %d sec" % self.interval
+        if self.pidfile:
+            try:
+                pf = open(self.pidfile, 'r')
+                pid = int(pf.read().strip())
+                pf.close()
+            except IOError:
+                pid = None
+
+            if pid:
+                print "Daemon already running. Check %s pidfile" % self.pidfile
+                sys.exit(1)
+
+            atexit.register(self.delpid)
+            pid = str(os.getpid())
+            file(self.pidfile, 'w+').write('%s\n' % pid)
+
+        if self.checkmeth == 1:
+            print "Monitoring thermal core at interval of %d sec" % self.interval
+        else:
+            print "Monitoring i8k at interval of %d sec" % self.interval
 
         while not sleep(self.interval):
+
+            if self.checkmeth == 0:
+                temp  = self.get_cpu_temp()
+
+                #rfans = self.get_fan_status(I8K_FAN_RIGHT)
+                #lfans = self.get_fan_status(I8K_FAN_LEFT)
+
+                #lfansp = self.get_fan_speed(I8K_FAN_LEFT)
+                #rfansp = self.get_fan_speed(I8K_FAN_RIGHT)
+
+            else:
+                temp  = self.get_thm_temp()
+
             power = self.get_power_status()
-            temp  = self.get_cpu_temp()
-
-            rfans = self.get_fan_status(I8K_FAN_RIGHT)
-            lfans = self.get_fan_status(I8K_FAN_LEFT)
-
-            lfansp = self.get_fan_speed(I8K_FAN_LEFT)
-            rfansp = self.get_fan_speed(I8K_FAN_RIGHT)
-
             tempset = self.temps[power and 1 or 0]
 
             if temp <= tempset[0] - tempset[4]: lf_state = 0
@@ -190,6 +232,15 @@ class Monitor(object):
         except IOError, exc:
             return exc.errno
     def get_power_status(self):
+        if self.checkmeth == 1:
+            ac = self.aca.read()
+            self.aca.seek(0)
+
+            if 'on-line' in ac:
+                return 1
+            else:
+                return 0
+
         return self._ioctl(I8K_POWER_STATUS)
     def get_cpu_temp(self):
         return self._ioctl(I8K_GET_TEMP)
@@ -197,6 +248,15 @@ class Monitor(object):
         return self._ioctl(I8K_GET_SPEED, fan)
     def get_fan_status(self, fan):
         return self._ioctl(I8K_GET_FAN, fan)
+
+    def get_thm_temp(self):
+        temp = self.thm.read()
+        self.thm.seek(0)
+
+        try:
+            return int(temp.split()[1])
+        except:
+            return 0
 
 if __name__ == "__main__":
     parser = OptionParser(usage="%s [options]\n\n"

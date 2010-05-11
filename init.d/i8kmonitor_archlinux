@@ -7,9 +7,8 @@ PID=$(pidof -o %PPID python /usr/sbin/i8kmonitor)
 case "$1" in
   start)
     stat_busy "Starting i8kmonitor"
-    [ -z "$PID" ] && /usr/sbin/i8kmonitor >/dev/null 2>&1 &
-    PID=$(pidof -o %PPID python /usr/sbin/i8kmonitor)
-    if [ -z "$PID" -o $? -gt 0 ]; then
+    /usr/sbin/i8kmonitor >/dev/null 2>&1 &
+    if [ $? -gt 0 ]; then
       stat_fail
     else
       add_daemon i8kmonitor
@@ -18,10 +17,11 @@ case "$1" in
     ;;
   stop)
     stat_busy "Stopping i8kmonitor"
-    [ ! -z "$PID" ]  && kill -USR1 $PID &> /dev/null
+    [ -f /var/run/i8kmonitor.pid ] && kill `cat /var/run/i8kmonitor.pid` > /dev/null 2>&1
     if [ $? -gt 0 ]; then
       stat_fail
     else
+    rm -f /var/run/i8kmonitor.pid
       rm_daemon i8kmonitor
       stat_done
     fi

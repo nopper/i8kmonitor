@@ -1,7 +1,7 @@
 # Contributor: Francesco Piccinno <stack.box@gmail.com>
 
 pkgname=i8kmonitor
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Simple fan control daemon for i8k (Dell Latitude and Inspiron notebooks)"
 arch=(any)
